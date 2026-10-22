@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Mac app build
+.build/
+build/
+Resources/AppIcon.iconset/
+
+# FFmpeg compiled from source by Vendor/ffmpeg/build-*.sh
+Vendor/ffmpeg/mac/
+Vendor/ffmpeg/windows/
+
+# Windows app build
+windows/dist/
+windows/app/bin/
+windows/app/obj/
+windows/engine/out/
+windows/vendor/go2rtc/go2rtc.exe
