@@ -98,6 +98,13 @@ final class CameraStore: ObservableObject {
         cameras.flatMap { cam in cam.lenses.map { Feed(camera: cam, lens: $0) } }
     }
 
+    /// Feeds with the featured one first (it takes the big spot in featured layouts).
+    func orderedFeeds(featured: String) -> [Feed] {
+        var list = feeds
+        if let i = list.firstIndex(where: { $0.id == featured }) { list.insert(list.remove(at: i), at: 0) }
+        return list
+    }
+
     private let fileURL: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("TapoCam", isDirectory: true)

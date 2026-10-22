@@ -100,7 +100,7 @@ public sealed class MainWindow : Window
         KeyDown += OnKeyDown;
         KeyUp += OnKeyUp;
         content.PointerWheelChanged += OnWheel;
-        Closing += (_, _) => { foreach (var t in tiles.Values) t.Stop(); focusedTile?.Stop(); };
+        Closing += (_, _) => { pip?.Close(); foreach (var t in tiles.Values) t.Stop(); focusedTile?.Stop(); };
         Opened += (_, _) => ShowScreenshotScene();
         Rebuild();
     }
@@ -118,6 +118,9 @@ public sealed class MainWindow : Window
                 selectedFeedId = OrderedFeeds.FirstOrDefault(f => f.Camera.Ptz)?.Id;
                 UpdateSelection();
                 break;
+            case "pip":
+                OpenPip(null);
+                break;
             case "remote":
                 await new RemoteWindow(store, location, bridge).ShowDialog(this);
                 break;
@@ -126,16 +129,7 @@ public sealed class MainWindow : Window
 
     // MARK: Feeds and pages
 
-    List<Feed> OrderedFeeds
-    {
-        get
-        {
-            var feeds = store.Feeds.ToList();
-            int i = feeds.FindIndex(f => f.Id == settings.FeaturedFeed);
-            if (i > 0) { var f = feeds[i]; feeds.RemoveAt(i); feeds.Insert(0, f); }
-            return feeds;
-        }
-    }
+    List<Feed> OrderedFeeds => store.OrderedFeeds(settings.FeaturedFeed);
 
     int PerPage => (int)settings.Layout;
     int PageCount => Math.Max(1, (OrderedFeeds.Count + PerPage - 1) / PerPage);
@@ -253,6 +247,16 @@ public sealed class MainWindow : Window
     }
 
     StackPanel? gridPanel;
+    PipWindow? pip;
+
+    /// Opens (or replaces) the Picture in Picture window: whole grid, or one camera.
+    void OpenPip(Feed? single)
+    {
+        pip?.Close();
+        pip = new PipWindow(store, settings, location, page, single, () => { Activate(); WindowState = WindowState.Normal; });
+        pip.Closed += (_, _) => pip = null;
+        pip.Show();
+    }
 
     void StopTiles(List<string> keys)
     {
@@ -263,6 +267,8 @@ public sealed class MainWindow : Window
     {
         var open = new MenuItem { Header = feed.Camera.Ptz ? "Abrir e controlar" : "Ver em alta qualidade" };
         open.Click += (_, _) => Open(feed);
+        var pipItem = new MenuItem { Header = "Picture in Picture" };
+        pipItem.Click += (_, _) => OpenPip(feed);
         var feature = new MenuItem { Header = "Colocar em destaque" };
         feature.Click += (_, _) => { settings.FeaturedFeed = feed.Id; settings.Save(); page = 0; Rebuild(); };
         var edit = new MenuItem { Header = "Editar…" };
@@ -272,7 +278,7 @@ public sealed class MainWindow : Window
         {
             if (await Dialogs.Confirm(this, $"Remover {feed.Camera.Name}?", "Remover")) store.Remove(feed.Camera);
         };
-        return new ContextMenu { Items = { open, feature, edit, new Separator(), remove } };
+        return new ContextMenu { Items = { open, pipItem, feature, edit, new Separator(), remove } };
     }
 
     void BuildPager()
@@ -372,6 +378,11 @@ public sealed class MainWindow : Window
             ToolTip.SetTip(back, "Voltar pra grade (Esc)");
             back.Click += (_, _) => CloseFocused();
             toolbar.Children.Add(back);
+            var focusedPip = new Button { Content = "⧉ PiP" };
+            ToolTip.SetTip(focusedPip, "Abrir esta câmera numa janelinha por cima de tudo");
+            var focusedFeed = new Feed(focused, focusedLens);
+            focusedPip.Click += (_, _) => OpenPip(focusedFeed);
+            toolbar.Children.Add(focusedPip);
             if (focused.DualLens)
             {
                 foreach (var (lens, name) in new[] { (0, "Grande-angular"), (1, "Zoom") })
@@ -419,6 +430,11 @@ public sealed class MainWindow : Window
                 { settings.FeaturedFeed = id; settings.Save(); page = 0; Rebuild(); }
             };
             toolbar.Children.Add(featured);
+
+            var gridPip = new Button { Content = "⧉ PiP" };
+            ToolTip.SetTip(gridPip, "Abrir a grade numa janelinha por cima de tudo (duplo clique numa câmera mostra só ela)");
+            gridPip.Click += (_, _) => OpenPip(null);
+            toolbar.Children.Add(gridPip);
         }
 
         var where = new Button { Content = location.IsHome ? "🏠 Em casa" : "🌐 Fora" };

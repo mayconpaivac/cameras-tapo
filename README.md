@@ -13,12 +13,14 @@ em casa ou de fora (via Tailscale), sem nuvem e sem abrir portas no roteador.
 
 ## Recursos
 
-- **Grade de 1, 2, 4, 5, 6 ou 8 câmeras por tela**, com páginas que passam para o lado (setas, trackpad ou botões).
+- **Grade de 1, 2, 4, 5, 6, 8, 9, 12 ou 16 câmeras por tela**, com páginas que passam para o lado (setas, trackpad ou botões).
   O modo 5 tem três arranjos: 1 grande + 4 à direita, 1 grande + 4 embaixo, 3 em cima + 2 embaixo.
 - **Câmera em destaque**: escolha qual fica na primeira posição (a grande, nos arranjos com destaque).
 - **Câmeras com duas lentes** (ex.: C245D): cada lente vira um quadro; na tela cheia troca-se a lente no topo.
 - **PTZ (mover a câmera)** na grade e na tela cheia: clique para selecionar a câmera, mexa com as setas da tela
   ou do teclado, e vá para as **posições salvas** no app Tapo.
+- **Picture in Picture**: janelinha que fica por cima de todos os apps (e de apps em tela cheia), com a mesma
+  grade da janela principal ou uma câmera só — duplo clique alterna. Dá para arrastar e redimensionar.
 - **Alta qualidade** sempre, decodificação por **hardware** no Mac (VideoToolbox) e buffer anti-tremida para Wi-Fi.
 - **Escanear a rede** e identificar câmeras Tapo/TP-Link; **detecção automática** de duas lentes e PTZ.
 - **PC de casa como ponte**: as câmeras cadastradas no Windows aparecem sozinhas no Mac (com as senhas,
@@ -98,7 +100,10 @@ Requisitos: Mac com Apple Silicon, macOS 15 ou mais novo.
   (setas + **Posições**). **Setas do teclado** movem a câmera selecionada; **Esc** tira a seleção.
 - **Duplo clique**: tela cheia em alta qualidade, com PTZ e troca de lente (câmeras de duas lentes). **Esc** volta.
 - Sem câmera selecionada, **← →** ou dois dedos no trackpad trocam de página.
-- Topo: modos de grade, arranjo do modo 5, **Destaque**, **Em casa / Fora** (acesso remoto) e **Sincronizar**.
+- Topo: modos de grade, arranjo do modo 5, **Destaque**, **Picture in Picture**, **Em casa / Fora** (acesso remoto)
+  e **Sincronizar**.
+- **Picture in Picture**: botão no topo (grade inteira), botão direito numa câmera ou botão na tela cheia (uma
+  câmera). Na janelinha, passe o mouse para ver os controles (grade/uma câmera, páginas, voltar ao app, fechar).
 - Sem PC configurado, dá para usar sozinho: **Escanear** → **Adicionar** (com **Detectar automaticamente**).
 
 **Conectar ao PC de casa**: botão **Em casa / Fora** → cole o endereço do PC no Tailscale (`100.x.y.z`) e o
@@ -135,7 +140,8 @@ vez, o SmartScreen pode avisar "aplicativo não reconhecido" (o app não é assi
 **No PC (uma vez)**: Tailscale logado, **Preferences → Run unattended**, no painel do Tailscale
 **Disable key expiry**, e Energia → **Suspender: Nunca**.
 
-**Usar**: igual ao Mac (grade, destaque, seleção com PTZ, tela cheia, escanear, detectar). Em **Acesso remoto**
+**Usar**: igual ao Mac (grade, destaque, seleção com PTZ, tela cheia, Picture in Picture — janela sempre por
+cima —, escanear, detectar). Em **Acesso remoto**
 aparecem o endereço do PC no Tailscale e o **código de pareamento** para o Mac.
 
 **Diagnóstico**: Menu Iniciar → **Câmeras Tapo → Diagnóstico** (ou `CamerasTapo.exe --diagnostico`) testa vídeo
@@ -188,8 +194,8 @@ docs/images/              prints do README
 
 ## Para desenvolvimento
 
-- Prints com câmeras de demonstração: o app do Mac aceita `-screenshotScene ptz|focus|remote|scan` e o do
-  Windows `--screenshot-scene ptz|remote`. No Windows, `CAMERASTAPO_DATA_DIR` aponta para outra pasta de dados.
+- Prints com câmeras de demonstração: o app do Mac aceita `-screenshotScene ptz|focus|remote|scan|pip|pipsingle`
+  e o do Windows `--screenshot-scene ptz|remote|pip`. No Windows, `CAMERASTAPO_DATA_DIR` aponta para outra pasta de dados.
 - O ícone é desenhado por código: `swift Resources/icon/make-icon.swift`.
 
 ## Licenças de terceiros

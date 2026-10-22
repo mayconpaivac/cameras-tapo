@@ -44,12 +44,14 @@ struct VideoView: NSViewRepresentable {
 struct CameraTile: View {
     let feed: Feed
     let highQuality: Bool
+    var compact = false // small name label (PiP)
 
     @StateObject private var player: StreamPlayer
 
-    init(feed: Feed, highQuality: Bool, endpoint: Endpoint) {
+    init(feed: Feed, highQuality: Bool, endpoint: Endpoint, compact: Bool = false) {
         self.feed = feed
         self.highQuality = highQuality
+        self.compact = compact
         let url = feed.camera.rtspURL(password: Keychain.get(feed.camera.id) ?? "",
                                       lens: feed.lens, highQuality: highQuality, via: endpoint)
         _player = StateObject(wrappedValue: StreamPlayer(url: url, lockKey: feed.camera.host))
@@ -63,11 +65,11 @@ struct CameraTile: View {
                 Text(feed.title)
                 if feed.camera.ptz { Image(systemName: "move.3d").imageScale(.small) }
             }
-            .font(.callout.weight(.semibold))
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+            .font(compact ? .system(size: 9, weight: .semibold) : .callout.weight(.semibold))
+            .padding(.horizontal, compact ? 4 : 8).padding(.vertical, compact ? 1 : 4)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: compact ? 3 : 6))
             .foregroundStyle(.white)
-            .padding(8)
+            .padding(compact ? 3 : 8)
         }
         .background(Color.black)
         .onAppear { player.start() }
@@ -287,16 +289,11 @@ struct ContentView: View {
     @AppStorage("fiveStyle") private var fiveStyle = FiveStyle.threeTwo.rawValue
     @AppStorage("featuredFeed") private var featuredFeed = ""
     @StateObject private var ptzSelection = PTZSelection()
+    @StateObject private var pip = PiPManager()
     @State private var page = 0
 
     /// Featured camera first: it takes the big spot (or the first one).
-    private var orderedFeeds: [Feed] {
-        let feeds = store.feeds
-        guard let i = feeds.firstIndex(where: { $0.id == featuredFeed }) else { return feeds }
-        var list = feeds
-        list.insert(list.remove(at: i), at: 0)
-        return list
-    }
+    private var orderedFeeds: [Feed] { store.orderedFeeds(featured: featuredFeed) }
 
     private var layout: GridLayout { GridLayout(rawValue: gridLayout) ?? .four }
 
@@ -351,10 +348,16 @@ struct ContentView: View {
             case "ptz": if let f = ptzFeed { ptzSelection.select(f, endpoint: location.endpoint(for: f.camera)) }
             case "focus": if let f = ptzFeed { open(f) }
             case "remote": remoteSettings = true
+            case "pip": pip.showGrid(page: page, store: store, location: location, sync: sync)
+            case "pipsingle": if let f = orderedFeeds.first { startPiP(f) }
             case "scan": scanning = true
             default: break
             }
         }
+    }
+
+    private func startPiP(_ feed: Feed) {
+        pip.showSingle(feed, store: store, location: location, sync: sync)
     }
 
     private func open(_ feed: Feed) {
@@ -373,7 +376,8 @@ struct ContentView: View {
                   onFeature: { feed in
                       featuredFeed = feed.id
                       page = 0
-                  })
+                  },
+                  onPiP: { startPiP($0) })
     }
 
     private var emptyState: some View {
@@ -401,6 +405,10 @@ struct ContentView: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup {
             if let focused {
+                Button { startPiP(Feed(camera: focused, lens: focusedLens)) } label: {
+                    Label("Picture in Picture", systemImage: "pip.enter")
+                }
+                .help("Abrir esta câmera numa janelinha flutuante, por cima de tudo")
                 Button { focusedID = nil } label: { Label("Voltar", systemImage: "square.grid.2x2") }
                     .keyboardShortcut(.escape, modifiers: [])
                     .help("Voltar pra grade (Esc)")
@@ -444,6 +452,12 @@ struct ContentView: View {
                     .fixedSize()
                     .help("Arranjo do modo 5. A câmera grande é a primeira — use \"Colocar em destaque\" no clique direito.")
                 }
+            }
+            if focused == nil && !store.cameras.isEmpty {
+                Button { pip.showGrid(page: page, store: store, location: location, sync: sync) } label: {
+                    Label("Picture in Picture", systemImage: "pip.enter")
+                }
+                .help("Abrir a grade numa janelinha flutuante, por cima de tudo (duplo clique numa câmera mostra só ela)")
             }
             Button { remoteSettings = true } label: {
                 Label(location.isHome ? "Em casa" : "Fora", systemImage: location.isHome ? "house" : "globe")

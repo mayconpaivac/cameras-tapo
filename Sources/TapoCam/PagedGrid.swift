@@ -26,7 +26,7 @@ enum FiveStyle: String, CaseIterable, Identifiable {
 
 /// How many cameras fit on one page.
 enum GridLayout: Int, CaseIterable, Identifiable {
-    case one = 1, two = 2, four = 4, five = 5, six = 6, eight = 8
+    case one = 1, two = 2, four = 4, five = 5, six = 6, eight = 8, nine = 9, twelve = 12, sixteen = 16
 
     var id: Int { rawValue }
 
@@ -38,6 +38,9 @@ enum GridLayout: Int, CaseIterable, Identifiable {
         case .four: return rows([2, 2])
         case .six: return rows([3, 3])
         case .eight: return rows([4, 4])
+        case .nine: return rows([3, 3, 3])
+        case .twelve: return rows([4, 4, 4])
+        case .sixteen: return rows([4, 4, 4, 4])
         case .five:
             switch five {
             case .threeTwo:
@@ -78,6 +81,7 @@ struct PagedGrid: View {
     let onEdit: (Camera) -> Void
     let onRemove: (Camera) -> Void
     let onFeature: (Feed) -> Void
+    var onPiP: ((Feed) -> Void)? = nil
 
     @State private var direction: Edge = .trailing
     @State private var scrollMonitor: Any?
@@ -171,6 +175,7 @@ struct PagedGrid: View {
             .contextMenu {
                 Button(feed.camera.ptz ? "Abrir e controlar" : "Ver em alta qualidade") { onOpen(feed) }
                 Button("Colocar em destaque") { onFeature(feed) }
+                if let onPiP { Button("Picture in Picture") { onPiP(feed) } }
                 if !managedByPC {
                     Button("Editar…") { onEdit(feed.camera) }
                     Divider()

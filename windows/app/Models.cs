@@ -134,6 +134,15 @@ public class CameraStore
 
     public IEnumerable<Feed> Feeds => Cameras.SelectMany(c => c.Lenses.Select(l => new Feed(c, l)));
 
+    /// Feeds with the featured one first (it takes the big spot in featured layouts).
+    public List<Feed> OrderedFeeds(string featured)
+    {
+        var feeds = Feeds.ToList();
+        int i = feeds.FindIndex(f => f.Id == featured);
+        if (i > 0) { var f = feeds[i]; feeds.RemoveAt(i); feeds.Insert(0, f); }
+        return feeds;
+    }
+
     public string Password(Camera c) => Secrets.Unprotect(c.Secret);
 
     public void Save(Camera camera, string? password)
@@ -167,7 +176,7 @@ public class CameraStore
     void Persist() => File.WriteAllText(file, JsonSerializer.Serialize(Cameras, Json));
 }
 
-public enum GridLayout { One = 1, Two = 2, Four = 4, Five = 5, Six = 6, Eight = 8 }
+public enum GridLayout { One = 1, Two = 2, Four = 4, Five = 5, Six = 6, Eight = 8, Nine = 9, Twelve = 12, Sixteen = 16 }
 public enum FiveStyle { BigLeft, BigTop, ThreeTwo }
 public enum LocationMode { Auto, Home, Away }
 
@@ -212,6 +221,9 @@ public static class Layouts
             case GridLayout.Four: return Rows(2, 2);
             case GridLayout.Six: return Rows(3, 3);
             case GridLayout.Eight: return Rows(4, 4);
+            case GridLayout.Nine: return Rows(3, 3, 3);
+            case GridLayout.Twelve: return Rows(4, 4, 4);
+            case GridLayout.Sixteen: return Rows(4, 4, 4, 4);
         }
         switch (five)
         {

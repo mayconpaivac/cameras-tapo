@@ -22,7 +22,7 @@ public sealed class VideoTile : Border
         Margin = new Thickness(12), FontSize = 12, Opacity = 0.85,
     };
 
-    public VideoTile(Feed feed, bool highQuality, Endpoint endpoint, string password)
+    public VideoTile(Feed feed, bool highQuality, Endpoint endpoint, string password, bool compact = false)
     {
         Feed = feed;
         Background = Brushes.Black;
@@ -33,14 +33,14 @@ public sealed class VideoTile : Border
         {
             Background = new SolidColorBrush(Color.FromArgb(140, 0, 0, 0)),
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(8, 3),
-            Margin = new Thickness(8),
+            Padding = compact ? new Thickness(4, 1) : new Thickness(8, 3),
+            Margin = new Thickness(compact ? 3 : 8),
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Bottom,
             Child = new TextBlock
             {
                 Text = feed.Title + (feed.Camera.Ptz ? "  ✥" : ""),
-                Foreground = Brushes.White, FontWeight = FontWeight.SemiBold, FontSize = 13,
+                Foreground = Brushes.White, FontWeight = FontWeight.SemiBold, FontSize = compact ? 9 : 13,
             },
         };
         Child = new Grid { Children = { image, status, label } };
