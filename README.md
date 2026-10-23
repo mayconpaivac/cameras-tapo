@@ -39,9 +39,9 @@ em casa ou de fora (via Tailscale), sem nuvem e sem abrir portas no roteador.
 |---|---|
 | ![Grade 2×2](docs/images/mac-grade.jpg) | ![Modo 5](docs/images/mac-modo5.jpg) |
 
-| Mac — tela cheia com PTZ | Mac — acesso remoto |
+| Mac — tela cheia com PTZ e ‹ › para trocar de câmera | Mac — acesso remoto |
 |---|---|
-| ![Tela cheia](docs/images/mac-telacheia.jpg) | ![Acesso remoto no Mac](docs/images/mac-remoto.jpg) |
+| ![Tela cheia com setas para trocar de câmera](docs/images/mac-telacheia.jpg) | ![Acesso remoto no Mac](docs/images/mac-remoto.jpg) |
 
 | Windows — grade com PTZ | Windows — acesso remoto (código de pareamento) |
 |---|---|
