@@ -65,7 +65,7 @@ public sealed class PipWindow : Window
         Position = new PixelPoint(area.Right - (int)((Width + 20) * scale), area.Bottom - (int)((Height + 20) * scale));
     }
 
-    List<Feed> Feeds => store.OrderedFeeds(settings.FeaturedFeed);
+    List<Feed> Feeds => store.OrderedFeeds(settings.FeedOrder);
     int PerPage => (int)settings.Layout;
     int PageCount => Math.Max(1, (Feeds.Count + PerPage - 1) / PerPage);
 

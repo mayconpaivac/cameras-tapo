@@ -134,13 +134,16 @@ public class CameraStore
 
     public IEnumerable<Feed> Feeds => Cameras.SelectMany(c => c.Lenses.Select(l => new Feed(c, l)));
 
-    /// Feeds with the featured one first (it takes the big spot in featured layouts).
-    public List<Feed> OrderedFeeds(string featured)
+    /// Feeds in the order the user arranged them (drag and drop). New ones go last.
+    /// The first one takes the big spot in featured layouts.
+    public List<Feed> OrderedFeeds(IList<string> order)
     {
-        var feeds = Feeds.ToList();
-        int i = feeds.FindIndex(f => f.Id == featured);
-        if (i > 0) { var f = feeds[i]; feeds.RemoveAt(i); feeds.Insert(0, f); }
-        return feeds;
+        var rank = new Dictionary<string, int>();
+        for (int i = 0; i < order.Count; i++) rank.TryAdd(order[i], i);
+        return Feeds.Select((f, i) => (f, i))
+            .OrderBy(x => rank.TryGetValue(x.f.Id, out var r) ? r : int.MaxValue)
+            .ThenBy(x => x.i)
+            .Select(x => x.f).ToList();
     }
 
     public string Password(Camera c) => Secrets.Unprotect(c.Secret);
@@ -185,6 +188,9 @@ public class Settings
 {
     public GridLayout Layout { get; set; } = GridLayout.Four;
     public FiveStyle FiveStyle { get; set; } = FiveStyle.ThreeTwo;
+    /// Feed ids in the order shown on the grid (drag and drop).
+    public List<string> FeedOrder { get; set; } = new();
+    /// Old setting (one featured camera); moved into FeedOrder on load.
     public string FeaturedFeed { get; set; } = "";
     public string ScanPrefix { get; set; } = "";
     public LocationMode Mode { get; set; } = LocationMode.Auto;
@@ -199,13 +205,43 @@ public class Settings
 
     public static Settings Load()
     {
-        try { return JsonSerializer.Deserialize<Settings>(File.ReadAllText(File_), Json) ?? new(); }
-        catch { return new(); }
+        Settings s;
+        try { s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(File_), Json) ?? new(); }
+        catch { s = new(); }
+        if (s.FeaturedFeed != "")
+        {
+            if (s.FeedOrder.Count == 0) s.FeedOrder.Add(s.FeaturedFeed);
+            s.FeaturedFeed = "";
+        }
+        return s;
     }
 
     public void Save()
     {
         try { File.WriteAllText(File_, JsonSerializer.Serialize(this, Json)); } catch { }
+    }
+}
+
+public static class FeedOrder
+{
+    /// Swaps the feed with whatever sits at `index` (or sends it last when that spot is empty).
+    public static List<string> Swap(List<Feed> current, string id, int index)
+    {
+        var ids = current.Select(f => f.Id).ToList();
+        int from = ids.IndexOf(id);
+        if (from < 0) return ids;
+        if (index < ids.Count) (ids[from], ids[index]) = (ids[index], ids[from]);
+        else { ids.RemoveAt(from); ids.Add(id); }
+        return ids;
+    }
+
+    /// Moves the feed to `index`, shifting the others.
+    public static List<string> Insert(List<Feed> current, string id, int index)
+    {
+        var ids = current.Select(f => f.Id).ToList();
+        if (!ids.Remove(id)) return ids;
+        ids.Insert(Math.Clamp(index, 0, ids.Count), id);
+        return ids;
     }
 }
 

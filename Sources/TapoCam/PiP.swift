@@ -91,10 +91,11 @@ struct PiPContentView: View {
     @AppStorage("gridLayout") private var gridLayout = GridLayout.four.rawValue
     @AppStorage("fiveStyle") private var fiveStyle = FiveStyle.threeTwo.rawValue
     @AppStorage("featuredFeed") private var featuredFeed = ""
+    @AppStorage("feedOrder") private var feedOrder = ""
     @State private var hovering = false
 
     private var layout: GridLayout { GridLayout(rawValue: gridLayout) ?? .four }
-    private var feeds: [Feed] { store.orderedFeeds(featured: featuredFeed) }
+    private var feeds: [Feed] { store.orderedFeeds(order: FeedOrder.parse(feedOrder, legacy: featuredFeed)) }
     private var pageCount: Int { max(1, (feeds.count + layout.rawValue - 1) / layout.rawValue) }
 
     var body: some View {

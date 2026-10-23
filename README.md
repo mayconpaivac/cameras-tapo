@@ -15,6 +15,8 @@ em casa ou de fora (via Tailscale), sem nuvem e sem abrir portas no roteador.
 
 - **Grade de 1, 2, 4, 5, 6, 8, 9, 12 ou 16 câmeras por tela**, com páginas que passam para o lado (setas, trackpad ou botões).
   O modo 5 tem três arranjos: 1 grande + 4 à direita, 1 grande + 4 embaixo, 3 em cima + 2 embaixo.
+- **Arrastar e soltar**: clique e arraste uma câmera sobre outra para trocar as duas de lugar; solte na seta
+  ‹ › do paginador para mandar para outra página. A ordem fica salva em cada computador.
 - **Câmera em destaque**: escolha qual fica na primeira posição (a grande, nos arranjos com destaque).
 - **Câmeras com duas lentes** (ex.: C245D): cada lente vira um quadro; na tela cheia troca-se a lente no topo.
 - **PTZ (mover a câmera)** na grade e na tela cheia: clique para selecionar a câmera, mexa com as setas da tela
@@ -99,6 +101,7 @@ Requisitos: Mac com Apple Silicon, macOS 15 ou mais novo.
 - **Clique simples** numa câmera: seleciona (borda azul). Se ela tem PTZ, aparece o controle no canto
   (setas + **Posições**). **Setas do teclado** movem a câmera selecionada; **Esc** tira a seleção.
 - **Duplo clique**: tela cheia em alta qualidade, com PTZ e troca de lente (câmeras de duas lentes). **Esc** volta.
+- **Arraste** uma câmera sobre outra para trocar as duas de lugar (ou sobre ‹ › para outra página).
 - Sem câmera selecionada, **← →** ou dois dedos no trackpad trocam de página.
 - Topo: modos de grade, arranjo do modo 5, **Destaque**, **Picture in Picture**, **Em casa / Fora** (acesso remoto)
   e **Sincronizar**.
@@ -140,7 +143,7 @@ vez, o SmartScreen pode avisar "aplicativo não reconhecido" (o app não é assi
 **No PC (uma vez)**: Tailscale logado, **Preferences → Run unattended**, no painel do Tailscale
 **Disable key expiry**, e Energia → **Suspender: Nunca**.
 
-**Usar**: igual ao Mac (grade, destaque, seleção com PTZ, tela cheia, Picture in Picture — janela sempre por
+**Usar**: igual ao Mac (grade, arrastar para reorganizar, destaque, seleção com PTZ, tela cheia, Picture in Picture — janela sempre por
 cima —, escanear, detectar). Em **Acesso remoto**
 aparecem o endereço do PC no Tailscale e o **código de pareamento** para o Mac.
 

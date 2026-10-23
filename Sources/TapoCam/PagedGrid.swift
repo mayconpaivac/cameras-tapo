@@ -82,10 +82,14 @@ struct PagedGrid: View {
     let onRemove: (Camera) -> Void
     let onFeature: (Feed) -> Void
     var onPiP: ((Feed) -> Void)? = nil
+    /// Drag and drop: (feed id, position in the full list, swap with the one there, or insert).
+    var onMove: ((String, Int, Bool) -> Void)? = nil
 
     @State private var direction: Edge = .trailing
     @State private var scrollMonitor: Any?
     @State private var scrollAccumulated: CGFloat = 0
+    @State private var dropTarget: Int?
+    @State private var pagerTarget = 0 // -1/1 while a camera is dragged over ‹ / ›
     @FocusState private var hasFocus: Bool
 
     private let spacing: CGFloat = 4
@@ -128,10 +132,6 @@ struct PagedGrid: View {
         .onChange(of: page) { refreshSelection() }
         .onChange(of: routeKey) { refreshSelection() }
         .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow, .escape], phases: [.down, .up], action: handleKey)
-        .gesture(DragGesture(minimumDistance: 40).onEnded { v in
-            guard abs(v.translation.width) > abs(v.translation.height) else { return }
-            go(v.translation.width < 0 ? 1 : -1)
-        })
     }
 
     private func pageView(size: CGSize) -> some View {
@@ -151,7 +151,25 @@ struct PagedGrid: View {
                         Color.white.opacity(0.03).clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
+                .overlay {
+                    if dropTarget == i {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.accentColor.opacity(0.2))
+                            .strokeBorder(Color.accentColor, lineWidth: 3)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .frame(width: max(w, 0), height: max(h, 0))
+                .dropDestination(for: String.self) { ids, _ in
+                    dropTarget = nil
+                    guard let id = ids.first, let onMove else { return false }
+                    let index = min(page, pageCount - 1) * layout.rawValue + i
+                    if i < items.count, items[i].id == id { return false }
+                    withAnimation(.easeInOut(duration: 0.2)) { onMove(id, index, true) }
+                    return true
+                } isTargeted: { over in
+                    if over { dropTarget = i } else if dropTarget == i { dropTarget = nil }
+                }
                 .offset(x: cell.minX * inner.width + spacing, y: cell.minY * inner.height + spacing)
             }
         }
@@ -171,6 +189,13 @@ struct PagedGrid: View {
                 hasFocus = true
                 if selection.feedID == feed.id { selection.clear() }
                 else { selection.select(feed, endpoint: endpoint(feed.camera)) }
+            }
+            .draggable(feed.id) {
+                Label(feed.title, systemImage: "video.fill")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Color.accentColor, in: Capsule())
             }
             .contextMenu {
                 Button(feed.camera.ptz ? "Abrir e controlar" : "Ver em alta qualidade") { onOpen(feed) }
@@ -240,6 +265,10 @@ struct PagedGrid: View {
         HStack(spacing: 12) {
             Button { go(-1) } label: { Image(systemName: "chevron.left") }
                 .disabled(page == 0)
+                .scaleEffect(pagerTarget == -1 ? 1.6 : 1)
+                .dropDestination(for: String.self) { ids, _ in dropOnPager(ids, -1) }
+                    isTargeted: { pagerTarget = $0 ? -1 : (pagerTarget == -1 ? 0 : pagerTarget) }
+                .help("Página anterior (solte uma câmera aqui pra mandar ela pra lá)")
             HStack(spacing: 6) {
                 ForEach(0..<pageCount, id: \.self) { i in
                     Circle()
@@ -251,12 +280,27 @@ struct PagedGrid: View {
             Text("\(page + 1)/\(pageCount)").font(.caption.monospacedDigit())
             Button { go(1) } label: { Image(systemName: "chevron.right") }
                 .disabled(page >= pageCount - 1)
+                .scaleEffect(pagerTarget == 1 ? 1.6 : 1)
+                .dropDestination(for: String.self) { ids, _ in dropOnPager(ids, 1) }
+                    isTargeted: { pagerTarget = $0 ? 1 : (pagerTarget == 1 ? 0 : pagerTarget) }
+                .help("Próxima página (solte uma câmera aqui pra mandar ela pra lá)")
         }
         .buttonStyle(.plain)
         .foregroundStyle(.white)
         .padding(.horizontal, 14).padding(.vertical, 7)
         .background(.black.opacity(0.6), in: Capsule())
         .padding(.bottom, 12)
+    }
+
+    /// Sends the dropped camera to the last spot of the previous page, or the first of the next one.
+    private func dropOnPager(_ ids: [String], _ dir: Int) -> Bool {
+        pagerTarget = 0
+        let target = page + dir
+        guard let id = ids.first, let onMove, target >= 0, target < pageCount,
+              feeds.contains(where: { $0.id == id }) else { return false }
+        onMove(id, dir < 0 ? page * layout.rawValue - 1 : (page + 1) * layout.rawValue, false)
+        jump(to: target)
+        return true
     }
 
     private func go(_ delta: Int) {

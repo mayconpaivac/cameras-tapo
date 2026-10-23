@@ -80,6 +80,32 @@ extension Camera {
     }
 }
 
+/// Grid order, saved as comma-separated feed ids (`feedOrder` in UserDefaults).
+enum FeedOrder {
+    /// `legacy` is the old single "featured" feed, used until the user rearranges.
+    static func parse(_ stored: String, legacy: String) -> [String] {
+        if stored.isEmpty { return legacy.isEmpty ? [] : [legacy] }
+        return stored.split(separator: ",").map(String.init)
+    }
+
+    /// Swaps the feed with whatever sits at `index` (or sends it last when that spot is empty).
+    static func swap(_ current: [Feed], id: String, index: Int) -> String {
+        var ids = current.map(\.id)
+        guard let from = ids.firstIndex(of: id) else { return ids.joined(separator: ",") }
+        if index < ids.count { ids.swapAt(from, index) } else { ids.append(ids.remove(at: from)) }
+        return ids.joined(separator: ",")
+    }
+
+    /// Moves the feed to `index`, shifting the others.
+    static func insert(_ current: [Feed], id: String, index: Int) -> String {
+        var ids = current.map(\.id)
+        guard let from = ids.firstIndex(of: id) else { return ids.joined(separator: ",") }
+        ids.remove(at: from)
+        ids.insert(id, at: min(max(index, 0), ids.count))
+        return ids.joined(separator: ",")
+    }
+}
+
 /// One video source shown on screen: a camera plus which lens.
 struct Feed: Identifiable, Hashable {
     let camera: Camera
@@ -98,11 +124,17 @@ final class CameraStore: ObservableObject {
         cameras.flatMap { cam in cam.lenses.map { Feed(camera: cam, lens: $0) } }
     }
 
-    /// Feeds with the featured one first (it takes the big spot in featured layouts).
-    func orderedFeeds(featured: String) -> [Feed] {
-        var list = feeds
-        if let i = list.firstIndex(where: { $0.id == featured }) { list.insert(list.remove(at: i), at: 0) }
-        return list
+    /// Feeds in the order the user arranged them (drag and drop). New ones go last.
+    /// The first one takes the big spot in featured layouts.
+    func orderedFeeds(order: [String]) -> [Feed] {
+        var rank: [String: Int] = [:]
+        for (i, id) in order.enumerated() where rank[id] == nil { rank[id] = i }
+        return feeds.enumerated()
+            .sorted { a, b in
+                let ra = rank[a.element.id] ?? .max, rb = rank[b.element.id] ?? .max
+                return ra != rb ? ra < rb : a.offset < b.offset
+            }
+            .map(\.element)
     }
 
     private let fileURL: URL = {

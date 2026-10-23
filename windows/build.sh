@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$HOME/.dotnet:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 
-VERSION="1.2.0"
+VERSION="1.3.0"
 
 engine/build.sh windows
 

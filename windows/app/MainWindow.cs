@@ -32,6 +32,15 @@ sealed class CellPanel : Panel
         return final;
     }
 
+    /// Which cell is under the point (-1 when none).
+    public int IndexAt(Point p)
+    {
+        for (int i = 0; i < Cells.Count; i++) if (Rect(i, Bounds.Size).Contains(p)) return i;
+        return -1;
+    }
+
+    public Rect CellRect(int i) => Rect(i, Bounds.Size);
+
     Rect Rect(int i, Size size)
     {
         var (x, y, w, h) = Cells[i];
@@ -65,6 +74,24 @@ public sealed class MainWindow : Window
     PtzPad? gridPad;
     string gridPadKey = "";
     double wheelX;
+    // Drag and drop to rearrange the grid.
+    List<Feed> pageFeeds = new();
+    Feed? dragFeed;
+    Point dragStart;
+    bool dragging;
+    bool suppressTap;
+    readonly Canvas dragLayer = new() { IsHitTestVisible = false };
+    readonly Border dragGhost = new()
+    {
+        Background = new SolidColorBrush(Color.FromArgb(220, 10, 132, 255)), CornerRadius = new CornerRadius(8),
+        Padding = new Thickness(10, 5), Child = new TextBlock { Foreground = Brushes.White, FontWeight = FontWeight.SemiBold },
+    };
+    readonly Border dropMarker = new()
+    {
+        BorderBrush = new SolidColorBrush(Color.Parse("#0a84ff")), BorderThickness = new Thickness(3), CornerRadius = new CornerRadius(6),
+        Background = new SolidColorBrush(Color.FromArgb(50, 10, 132, 255)),
+    };
+    Button? prevButton, nextButton;
 
     public MainWindow()
     {
@@ -100,6 +127,12 @@ public sealed class MainWindow : Window
         KeyDown += OnKeyDown;
         KeyUp += OnKeyUp;
         content.PointerWheelChanged += OnWheel;
+        cells.AddHandler(PointerPressedEvent, OnCellPressed, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        cells.PointerMoved += OnCellMoved;
+        cells.PointerReleased += OnCellReleased;
+        cells.PointerCaptureLost += (_, _) => EndDrag();
+        dragLayer.Children.Add(dropMarker);
+        dragLayer.Children.Add(dragGhost);
         Closing += (_, _) => { pip?.Close(); foreach (var t in tiles.Values) t.Stop(); focusedTile?.Stop(); };
         Opened += (_, _) => ShowScreenshotScene();
         Rebuild();
@@ -129,7 +162,14 @@ public sealed class MainWindow : Window
 
     // MARK: Feeds and pages
 
-    List<Feed> OrderedFeeds => store.OrderedFeeds(settings.FeaturedFeed);
+    List<Feed> OrderedFeeds => store.OrderedFeeds(settings.FeedOrder);
+
+    void SetOrder(List<string> ids)
+    {
+        settings.FeedOrder = ids;
+        settings.Save();
+        Rebuild();
+    }
 
     int PerPage => (int)settings.Layout;
     int PageCount => Math.Max(1, (OrderedFeeds.Count + PerPage - 1) / PerPage);
@@ -137,6 +177,7 @@ public sealed class MainWindow : Window
     void Rebuild()
     {
         if (focused != null) focused = store.Cameras.FirstOrDefault(c => c.Id == focused.Id);
+        EndDrag();
         BuildToolbar();
         content.Children.Clear();
         ptzPad?.StopMove();
@@ -154,6 +195,7 @@ public sealed class MainWindow : Window
         page = Math.Clamp(page, 0, PageCount - 1);
         var cellList = Layouts.Cells(settings.Layout, settings.FiveStyle);
         var feeds = OrderedFeeds.Skip(page * PerPage).Take(PerPage).ToList();
+        pageFeeds = feeds;
 
         var keep = new Dictionary<string, VideoTile>();
         cells.Children.Clear();
@@ -171,9 +213,10 @@ public sealed class MainWindow : Window
             if (!tiles.TryGetValue(key, out var tile))
             {
                 tile = new VideoTile(feed, hq, location.EndpointFor(feed.Camera), store.Password(feed.Camera));
-                tile.DoubleTapped += (_, _) => Open(feed);
+                tile.DoubleTapped += (_, _) => { if (!suppressTap) Open(feed); };
                 tile.Tapped += (_, _) =>
                 {
+                    if (suppressTap) return;
                     selectedFeedId = selectedFeedId == feed.Id ? null : feed.Id;
                     UpdateSelection();
                     Focus();
@@ -270,7 +313,7 @@ public sealed class MainWindow : Window
         var pipItem = new MenuItem { Header = "Picture in Picture" };
         pipItem.Click += (_, _) => OpenPip(feed);
         var feature = new MenuItem { Header = "Colocar em destaque" };
-        feature.Click += (_, _) => { settings.FeaturedFeed = feed.Id; settings.Save(); page = 0; Rebuild(); };
+        feature.Click += (_, _) => { page = 0; SetOrder(FeedOrder.Insert(OrderedFeeds, feed.Id, 0)); };
         var edit = new MenuItem { Header = "Editar…" };
         edit.Click += async (_, _) => await EditCamera(feed.Camera);
         var remove = new MenuItem { Header = "Remover…" };
@@ -286,6 +329,8 @@ public sealed class MainWindow : Window
         pager.Children.Clear();
         var prev = new Button { Content = "‹", IsEnabled = page > 0, Padding = new Thickness(10, 0) };
         prev.Click += (_, _) => Go(-1);
+        ToolTip.SetTip(prev, "Página anterior (solte uma câmera aqui pra mandar ela pra lá)");
+        prevButton = prev;
         pager.Children.Add(prev);
         for (int i = 0; i < PageCount; i++)
         {
@@ -297,6 +342,8 @@ public sealed class MainWindow : Window
         pager.Children.Add(new TextBlock { Text = $"{page + 1}/{PageCount}", Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
         var next = new Button { Content = "›", IsEnabled = page < PageCount - 1, Padding = new Thickness(10, 0) };
         next.Click += (_, _) => Go(1);
+        ToolTip.SetTip(next, "Próxima página (solte uma câmera aqui pra mandar ela pra lá)");
+        nextButton = next;
         pager.Children.Add(next);
     }
 
@@ -326,6 +373,105 @@ public sealed class MainWindow : Window
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Children = { scan, add } },
             },
         });
+    }
+
+    // MARK: Drag and drop
+
+    void OnCellPressed(object? sender, PointerPressedEventArgs e)
+    {
+        suppressTap = false;
+        dragFeed = null;
+        if (focused != null || !e.GetCurrentPoint(cells).Properties.IsLeftButtonPressed) return;
+        var pos = e.GetPosition(cells);
+        int i = cells.IndexAt(pos);
+        if (i < 0 || i >= pageFeeds.Count) return;
+        dragFeed = pageFeeds[i];
+        dragStart = pos;
+    }
+
+    void OnCellMoved(object? sender, PointerEventArgs e)
+    {
+        if (dragFeed == null) return;
+        var pos = e.GetPosition(cells);
+        if (!dragging)
+        {
+            if (!e.GetCurrentPoint(cells).Properties.IsLeftButtonPressed) { dragFeed = null; return; }
+            if (Math.Abs(pos.X - dragStart.X) + Math.Abs(pos.Y - dragStart.Y) < 12) return;
+            dragging = true;
+            suppressTap = true;
+            e.Pointer.Capture(cells);
+            ((TextBlock)dragGhost.Child!).Text = "⠿ " + dragFeed.Title;
+            if (TileFor(dragFeed) is { } t) t.Opacity = 0.4;
+            if (!content.Children.Contains(dragLayer)) content.Children.Add(dragLayer);
+            Cursor = new Cursor(StandardCursorType.DragMove);
+        }
+
+        var inContent = e.GetPosition(content);
+        Canvas.SetLeft(dragGhost, inContent.X + 12);
+        Canvas.SetTop(dragGhost, inContent.Y + 12);
+
+        int target = cells.IndexAt(pos);
+        var pagerTarget = PagerTargetAt(e);
+        dropMarker.IsVisible = target >= 0 && pagerTarget == 0;
+        if (dropMarker.IsVisible && cells.TranslatePoint(cells.CellRect(target).TopLeft, content) is { } tl)
+        {
+            var r = cells.CellRect(target);
+            Canvas.SetLeft(dropMarker, tl.X);
+            Canvas.SetTop(dropMarker, tl.Y);
+            dropMarker.Width = r.Width;
+            dropMarker.Height = r.Height;
+        }
+        if (prevButton != null) prevButton.Opacity = pagerTarget == -1 ? 0.5 : 1;
+        if (nextButton != null) nextButton.Opacity = pagerTarget == 1 ? 0.5 : 1;
+    }
+
+    void OnCellReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!dragging || dragFeed is not { } feed) { dragFeed = null; return; }
+        e.Handled = true;
+        int target = cells.IndexAt(e.GetPosition(cells));
+        int pagerTarget = PagerTargetAt(e);
+        e.Pointer.Capture(null);
+        EndDrag();
+
+        if (pagerTarget != 0)
+        {
+            // Last spot of the previous page, or first spot of the next one.
+            int index = pagerTarget < 0 ? page * PerPage - 1 : (page + 1) * PerPage;
+            page += pagerTarget;
+            SetOrder(FeedOrder.Insert(OrderedFeeds, feed.Id, index));
+        }
+        else if (target >= 0 && (target >= pageFeeds.Count || pageFeeds[target].Id != feed.Id))
+        {
+            SetOrder(FeedOrder.Swap(OrderedFeeds, feed.Id, page * PerPage + target));
+        }
+    }
+
+    /// -1/1 when the pointer is over the pager's ‹ / › button (and it can be used), else 0.
+    int PagerTargetAt(PointerEventArgs e)
+    {
+        if (!content.Children.Contains(pagerBox)) return 0;
+        foreach (var (b, dir) in new[] { (prevButton, -1), (nextButton, 1) })
+        {
+            if (b is not { IsEnabled: true }) continue;
+            var p = e.GetPosition(b);
+            if (p.X >= -6 && p.Y >= -6 && p.X <= b.Bounds.Width + 6 && p.Y <= b.Bounds.Height + 6) return dir;
+        }
+        return 0;
+    }
+
+    VideoTile? TileFor(Feed feed) => tiles.Values.FirstOrDefault(t => t.Feed.Id == feed.Id);
+
+    void EndDrag()
+    {
+        if (!dragging) { dragFeed = null; return; }
+        dragging = false;
+        if (dragFeed != null && TileFor(dragFeed) is { } t) t.Opacity = 1;
+        dragFeed = null;
+        content.Children.Remove(dragLayer);
+        Cursor = Cursor.Default;
+        if (prevButton != null) prevButton.Opacity = 1;
+        if (nextButton != null) nextButton.Opacity = 1;
     }
 
     // MARK: Full-window camera
@@ -427,7 +573,7 @@ public sealed class MainWindow : Window
             featured.SelectionChanged += (_, _) =>
             {
                 if (featured.SelectedItem is ComboBoxItem { Tag: string id } && id != OrderedFeeds.FirstOrDefault()?.Id)
-                { settings.FeaturedFeed = id; settings.Save(); page = 0; Rebuild(); }
+                { page = 0; SetOrder(FeedOrder.Insert(OrderedFeeds, id, 0)); }
             };
             toolbar.Children.Add(featured);
 
@@ -479,6 +625,7 @@ public sealed class MainWindow : Window
             if (dir is { } d) { ptzPad.StartMove(d.x, d.y); e.Handled = true; }
             return;
         }
+        if (e.Key == Key.Escape && dragging) { EndDrag(); e.Handled = true; return; }
         if (e.Key == Key.Escape && selectedFeedId != null) { selectedFeedId = null; UpdateSelection(); e.Handled = true; return; }
         if (gridPad != null)
         {

@@ -29,6 +29,9 @@ struct VideoView: NSViewRepresentable {
             }
         }
 
+        /// Only draws: clicks and drags go to the SwiftUI tile around it.
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
         override func layout() {
             super.layout()
             CATransaction.begin()
@@ -287,13 +290,19 @@ struct ContentView: View {
     @State private var scanning = false
     @AppStorage("gridLayout") private var gridLayout = GridLayout.four.rawValue
     @AppStorage("fiveStyle") private var fiveStyle = FiveStyle.threeTwo.rawValue
-    @AppStorage("featuredFeed") private var featuredFeed = ""
+    @AppStorage("featuredFeed") private var featuredFeed = "" // old setting, read by FeedOrder.parse
+    @AppStorage("feedOrder") private var feedOrder = ""
     @StateObject private var ptzSelection = PTZSelection()
     @StateObject private var pip = PiPManager()
     @State private var page = 0
 
-    /// Featured camera first: it takes the big spot (or the first one).
-    private var orderedFeeds: [Feed] { store.orderedFeeds(featured: featuredFeed) }
+    /// In the order the user arranged; the first one takes the big spot.
+    private var orderedFeeds: [Feed] { store.orderedFeeds(order: FeedOrder.parse(feedOrder, legacy: featuredFeed)) }
+
+    private func moveToFront(_ id: String) {
+        feedOrder = FeedOrder.insert(orderedFeeds, id: id, index: 0)
+        page = 0
+    }
 
     private var layout: GridLayout { GridLayout(rawValue: gridLayout) ?? .four }
 
@@ -373,11 +382,12 @@ struct ContentView: View {
                   managedByPC: sync.isEnabled,
                   selection: ptzSelection,
                   onOpen: open, onEdit: { editing = $0 }, onRemove: { removing = $0 },
-                  onFeature: { feed in
-                      featuredFeed = feed.id
-                      page = 0
-                  },
-                  onPiP: { startPiP($0) })
+                  onFeature: { moveToFront($0.id) },
+                  onPiP: { startPiP($0) },
+                  onMove: { id, index, swap in
+                      feedOrder = swap ? FeedOrder.swap(orderedFeeds, id: id, index: index)
+                                       : FeedOrder.insert(orderedFeeds, id: id, index: index)
+                  })
     }
 
     private var emptyState: some View {
@@ -432,7 +442,7 @@ struct ContentView: View {
                 Menu {
                     Picker("Destaque", selection: Binding(
                         get: { orderedFeeds.first?.id ?? "" },
-                        set: { featuredFeed = $0; page = 0 })) {
+                        set: { moveToFront($0) })) {
                         ForEach(store.feeds) { feed in Text(feed.title).tag(feed.id) }
                     }
                     .pickerStyle(.inline)
