@@ -17,6 +17,7 @@ public sealed class PipWindow : Window
     readonly NetworkLocation location;
     readonly CellPanel cells = new();
     readonly StackPanel controls = new() { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(8), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+    readonly Grid steps = new() { IsVisible = false };
     readonly List<VideoTile> tiles = new();
     readonly Action returnToApp;
     string? singleFeedId;
@@ -40,9 +41,11 @@ public sealed class PipWindow : Window
         Icon = (Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow?.Icon;
 
         controls.IsVisible = false;
-        var root = new Grid { Children = { cells, controls } };
-        root.PointerEntered += (_, _) => controls.IsVisible = true;
-        root.PointerExited += (_, _) => controls.IsVisible = false;
+        steps.Children.Add(MainWindow.StepArrow("‹", "Câmera anterior", HorizontalAlignment.Left, () => Step(-1), 30));
+        steps.Children.Add(MainWindow.StepArrow("›", "Próxima câmera", HorizontalAlignment.Right, () => Step(1), 30));
+        var root = new Grid { Children = { cells, steps, controls } };
+        root.PointerEntered += (_, _) => { controls.IsVisible = true; steps.IsVisible = singleFeedId != null && Feeds.Count > 1; };
+        root.PointerExited += (_, _) => { controls.IsVisible = false; steps.IsVisible = false; };
         Content = root;
 
         store.Changed += Rebuild;
@@ -113,8 +116,19 @@ public sealed class PipWindow : Window
         BuildControls(single != null);
     }
 
+    /// Single camera: previous/next in grid order, wrapping around.
+    void Step(int delta)
+    {
+        var feeds = Feeds;
+        int i = feeds.FindIndex(f => f.Id == singleFeedId);
+        if (i < 0 || feeds.Count < 2) return;
+        singleFeedId = feeds[(i + delta + feeds.Count) % feeds.Count].Id;
+        Rebuild();
+    }
+
     void BuildControls(bool single)
     {
+        steps.IsVisible = single && controls.IsVisible && Feeds.Count > 1;
         controls.Children.Clear();
         if (single) controls.Children.Add(Control("▦", "Ver todas as câmeras", () => { singleFeedId = null; Rebuild(); }));
         else if (PageCount > 1)

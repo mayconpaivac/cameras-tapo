@@ -509,8 +509,47 @@ public sealed class MainWindow : Window
             ptzPad = new PtzPad(new OnvifClient(endpoint.PtzHost, endpoint.OnvifPort, cam.Username, store.Password(cam)));
             grid.Children.Add(ptzPad);
         }
+        if (OrderedFeeds.Count > 1)
+        {
+            grid.Children.Add(StepArrow("‹", "Câmera anterior", HorizontalAlignment.Left, () => Step(-1)));
+            grid.Children.Add(StepArrow("›", "Próxima câmera", HorizontalAlignment.Right, () => Step(1)));
+        }
         content.Children.Add(grid);
         Focus();
+    }
+
+    /// Full-window view: goes to the previous/next camera in grid order, wrapping around.
+    void Step(int delta)
+    {
+        if (focused == null) return;
+        var feeds = OrderedFeeds;
+        if (feeds.Count < 2) return;
+        var current = new Feed(focused, focusedLens).Id;
+        int i = Math.Max(0, feeds.FindIndex(f => f.Id == current));
+        var next = feeds[(i + delta + feeds.Count) % feeds.Count];
+        ptzPad?.StopMove();
+        focused = next.Camera;
+        focusedLens = next.Lens;
+        Rebuild();
+    }
+
+    /// Round ‹ / › button on the side of a single-camera view.
+    internal static Button StepArrow(string glyph, string tip, HorizontalAlignment side, Action action, double size = 44)
+    {
+        var b = new Button
+        {
+            Content = glyph, Width = size, Height = size, Padding = new Thickness(0, 0, 0, size * 0.1),
+            FontSize = size * 0.6, FontWeight = FontWeight.Bold,
+            HorizontalAlignment = side, VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(size / 3, 0),
+            Background = new SolidColorBrush(Color.FromArgb(130, 0, 0, 0)), Foreground = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(50, 255, 255, 255)), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(size / 2),
+        };
+        ToolTip.SetTip(b, tip);
+        b.Click += (_, _) => action();
+        return b;
     }
 
     // MARK: Toolbar
@@ -617,7 +656,13 @@ public sealed class MainWindow : Window
         if (focused != null)
         {
             if (e.Key == Key.Escape) { CloseFocused(); e.Handled = true; return; }
-            if (ptzPad == null) return;
+            if (ptzPad == null)
+            {
+                // No PTZ: ← → switch cameras.
+                if (e.Key == Key.Left) { Step(-1); e.Handled = true; }
+                if (e.Key == Key.Right) { Step(1); e.Handled = true; }
+                return;
+            }
             (double x, double y)? dir = e.Key switch
             {
                 Key.Up => (0, 0.5), Key.Down => (0, -0.5), Key.Left => (-0.5, 0), Key.Right => (0.5, 0), _ => null,

@@ -106,6 +106,14 @@ struct PiPContentView: View {
             case .single(let id):
                 if let feed = feeds.first(where: { $0.id == id }) {
                     tile(feed).onTapGesture(count: 2) { pip.mode = .grid }
+                    if hovering && feeds.count > 1 {
+                        HStack {
+                            StepArrow(symbol: "chevron.left", help: "Câmera anterior", size: 30) { step(from: id, -1) }
+                            Spacer()
+                            StepArrow(symbol: "chevron.right", help: "Próxima câmera", size: 30) { step(from: id, 1) }
+                        }
+                        .padding(.horizontal, 8)
+                    }
                 } else {
                     Text("Câmera removida").foregroundStyle(.secondary)
                 }
@@ -115,6 +123,12 @@ struct PiPContentView: View {
         .ignoresSafeArea() // use the area under the (transparent) title bar too
         .onHover { hovering = $0 }
         .onChange(of: pageCount) { if pip.page >= pageCount { pip.page = pageCount - 1 } }
+    }
+
+    /// Single camera: previous/next in grid order, wrapping around.
+    private func step(from id: String, _ delta: Int) {
+        guard let i = feeds.firstIndex(where: { $0.id == id }) else { return }
+        pip.mode = .single(feeds[(i + delta + feeds.count) % feeds.count].id)
     }
 
     private var grid: some View {

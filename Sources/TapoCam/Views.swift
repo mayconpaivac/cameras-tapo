@@ -232,15 +232,18 @@ struct FocusedCameraView: View {
     let camera: Camera
     let endpoint: Endpoint
     @Binding var lens: Int
+    /// Jumps to the previous (-1) or next (1) camera. Nil when there is only one.
+    let onStep: ((Int) -> Void)?
     let onClose: () -> Void
 
     @StateObject private var ptz: PTZController
     @FocusState private var hasFocus: Bool
 
-    init(camera: Camera, endpoint: Endpoint, lens: Binding<Int>, onClose: @escaping () -> Void) {
+    init(camera: Camera, endpoint: Endpoint, lens: Binding<Int>, onStep: ((Int) -> Void)?, onClose: @escaping () -> Void) {
         self.camera = camera
         self.endpoint = endpoint
         _lens = lens
+        self.onStep = onStep
         self.onClose = onClose
         _ptz = StateObject(wrappedValue: PTZController(camera: camera, endpoint: endpoint))
     }
@@ -251,6 +254,15 @@ struct FocusedCameraView: View {
                 .id("hd-\(camera.id)-\(camera.revision)-\(lens)-\(endpoint.host)")
                 .onTapGesture(count: 2, perform: onClose)
             if camera.ptz { PTZPad(ptz: ptz) }
+            if let onStep {
+                HStack {
+                    StepArrow(symbol: "chevron.left", help: "Câmera anterior") { onStep(-1) }
+                    Spacer()
+                    StepArrow(symbol: "chevron.right", help: "Próxima câmera") { onStep(1) }
+                }
+                .padding(.horizontal, 16)
+                .frame(maxHeight: .infinity)
+            }
         }
         .focusable()
         .focusEffectDisabled()
@@ -261,7 +273,13 @@ struct FocusedCameraView: View {
         }
         .onDisappear { ptz.stop() }
         .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow], phases: [.down, .up]) { press in
-            guard camera.ptz else { return .ignored }
+            guard camera.ptz else {
+                // No PTZ: ← → switch cameras.
+                guard press.phase == .down, let onStep else { return .ignored }
+                if press.key == .leftArrow { onStep(-1); return .handled }
+                if press.key == .rightArrow { onStep(1); return .handled }
+                return .ignored
+            }
             if press.phase == .up { ptz.stop(); return .handled }
             guard !ptz.moving else { return .handled }
             switch press.key {
@@ -272,6 +290,28 @@ struct FocusedCameraView: View {
             }
             return .handled
         }
+    }
+}
+
+/// Round ‹ / › button on the side of a single-camera view.
+struct StepArrow: View {
+    let symbol: String
+    let help: String
+    var size: CGFloat = 44
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: size * 0.45, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(.black.opacity(0.5), in: Circle())
+                .overlay(Circle().strokeBorder(.white.opacity(0.2)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
 
@@ -314,7 +354,8 @@ struct ContentView: View {
         Group {
             if let focused {
                 FocusedCameraView(camera: focused, endpoint: location.endpoint(for: focused),
-                                  lens: $focusedLens) { focusedID = nil }
+                                  lens: $focusedLens,
+                                  onStep: orderedFeeds.count > 1 ? step : nil) { focusedID = nil }
                     .id("focus-\(focused.id)-\(focused.revision)-\(location.routeKey)")
             } else if store.cameras.isEmpty {
                 emptyState
@@ -373,6 +414,18 @@ struct ContentView: View {
         ptzSelection.clear()
         focusedLens = feed.lens
         focusedID = feed.camera.id
+    }
+
+    /// Full-window view: goes to the previous/next camera in grid order, wrapping around.
+    private func step(_ delta: Int) {
+        guard let focused else { return }
+        let feeds = orderedFeeds
+        guard feeds.count > 1 else { return }
+        let current = Feed(camera: focused, lens: focusedLens).id
+        let i = feeds.firstIndex { $0.id == current } ?? 0
+        let next = feeds[(i + delta + feeds.count) % feeds.count]
+        focusedLens = next.lens
+        focusedID = next.camera.id
     }
 
     private var grid: some View {
