@@ -21,6 +21,8 @@ em casa ou de fora (via Tailscale), sem nuvem e sem abrir portas no roteador.
 - **Câmeras com duas lentes** (ex.: C245D): cada lente vira um quadro; na tela cheia troca-se a lente no topo.
 - **PTZ (mover a câmera)** na grade e na tela cheia: clique para selecionar a câmera, mexa com as setas da tela
   ou do teclado, e vá para as **posições salvas** no app Tapo.
+- **Trocar de câmera sem voltar à grade**: na tela cheia e no Picture in Picture de uma câmera, as setas ‹ ›
+  nas laterais passam para a anterior/próxima, na ordem da grade (da última volta para a primeira).
 - **Picture in Picture**: janelinha que fica por cima de todos os apps (e de apps em tela cheia), com a mesma
   grade da janela principal ou uma câmera só — duplo clique alterna. Dá para arrastar e redimensionar.
 - **Alta qualidade** sempre, decodificação por **hardware** no Mac (VideoToolbox) e buffer anti-tremida para Wi-Fi.
@@ -101,12 +103,14 @@ Requisitos: Mac com Apple Silicon, macOS 15 ou mais novo.
 - **Clique simples** numa câmera: seleciona (borda azul). Se ela tem PTZ, aparece o controle no canto
   (setas + **Posições**). **Setas do teclado** movem a câmera selecionada; **Esc** tira a seleção.
 - **Duplo clique**: tela cheia em alta qualidade, com PTZ e troca de lente (câmeras de duas lentes). **Esc** volta.
+- Na tela cheia, **‹ ›** nas laterais ou **⌘← ⌘→** trocam de câmera (em câmera sem PTZ, **← →** sozinhas também).
 - **Arraste** uma câmera sobre outra para trocar as duas de lugar (ou sobre ‹ › para outra página).
 - Sem câmera selecionada, **← →** ou dois dedos no trackpad trocam de página.
 - Topo: modos de grade, arranjo do modo 5, **Destaque**, **Picture in Picture**, **Em casa / Fora** (acesso remoto)
   e **Sincronizar**.
 - **Picture in Picture**: botão no topo (grade inteira), botão direito numa câmera ou botão na tela cheia (uma
-  câmera). Na janelinha, passe o mouse para ver os controles (grade/uma câmera, páginas, voltar ao app, fechar).
+  câmera). Na janelinha, passe o mouse para ver os controles (grade/uma câmera, páginas, ‹ › para trocar de
+  câmera, voltar ao app, fechar).
 - Sem PC configurado, dá para usar sozinho: **Escanear** → **Adicionar** (com **Detectar automaticamente**).
 
 **Conectar ao PC de casa**: botão **Em casa / Fora** → cole o endereço do PC no Tailscale (`100.x.y.z`) e o
@@ -144,7 +148,7 @@ vez, o SmartScreen pode avisar "aplicativo não reconhecido" (o app não é assi
 **Disable key expiry**, e Energia → **Suspender: Nunca**.
 
 **Usar**: igual ao Mac (grade, arrastar para reorganizar, destaque, seleção com PTZ, tela cheia, Picture in Picture — janela sempre por
-cima —, escanear, detectar). Em **Acesso remoto**
+cima —, escanear, detectar). Na tela cheia, troca-se de câmera com ‹ › ou **Ctrl+← Ctrl+→**. Em **Acesso remoto**
 aparecem o endereço do PC no Tailscale e o **código de pareamento** para o Mac.
 
 **Diagnóstico**: Menu Iniciar → **Câmeras Tapo → Diagnóstico** (ou `CamerasTapo.exe --diagnostico`) testa vídeo
