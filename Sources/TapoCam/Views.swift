@@ -256,9 +256,9 @@ struct FocusedCameraView: View {
             if camera.ptz { PTZPad(ptz: ptz) }
             if let onStep {
                 HStack {
-                    StepArrow(symbol: "chevron.left", help: "Câmera anterior") { onStep(-1) }
+                    StepArrow(symbol: "chevron.left", help: "Câmera anterior (⌘←)", shortcut: .leftArrow) { onStep(-1) }
                     Spacer()
-                    StepArrow(symbol: "chevron.right", help: "Próxima câmera") { onStep(1) }
+                    StepArrow(symbol: "chevron.right", help: "Próxima câmera (⌘→)", shortcut: .rightArrow) { onStep(1) }
                 }
                 .padding(.horizontal, 16)
                 .frame(maxHeight: .infinity)
@@ -273,6 +273,7 @@ struct FocusedCameraView: View {
         }
         .onDisappear { ptz.stop() }
         .onKeyPress(keys: [.upArrow, .downArrow, .leftArrow, .rightArrow], phases: [.down, .up]) { press in
+            if press.modifiers.contains(.command) && press.phase == .down { return .ignored } // ⌘← → switch cameras
             guard camera.ptz else {
                 // No PTZ: ← → switch cameras.
                 guard press.phase == .down, let onStep else { return .ignored }
@@ -298,6 +299,8 @@ struct StepArrow: View {
     let symbol: String
     let help: String
     var size: CGFloat = 44
+    /// Pressed with ⌘.
+    var shortcut: KeyEquivalent? = nil
     let action: () -> Void
 
     var body: some View {
@@ -312,6 +315,7 @@ struct StepArrow: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .keyboardShortcut(shortcut.map { KeyboardShortcut($0, modifiers: .command) })
     }
 }
 

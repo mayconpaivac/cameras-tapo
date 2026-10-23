@@ -511,8 +511,8 @@ public sealed class MainWindow : Window
         }
         if (OrderedFeeds.Count > 1)
         {
-            grid.Children.Add(StepArrow("‹", "Câmera anterior", HorizontalAlignment.Left, () => Step(-1)));
-            grid.Children.Add(StepArrow("›", "Próxima câmera", HorizontalAlignment.Right, () => Step(1)));
+            grid.Children.Add(StepArrow("‹", "Câmera anterior (Ctrl+←)", HorizontalAlignment.Left, () => Step(-1)));
+            grid.Children.Add(StepArrow("›", "Próxima câmera (Ctrl+→)", HorizontalAlignment.Right, () => Step(1)));
         }
         content.Children.Add(grid);
         Focus();
@@ -656,6 +656,9 @@ public sealed class MainWindow : Window
         if (focused != null)
         {
             if (e.Key == Key.Escape) { CloseFocused(); e.Handled = true; return; }
+            // Ctrl+← → switch cameras, even with PTZ.
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key is Key.Left or Key.Right)
+            { Step(e.Key == Key.Left ? -1 : 1); e.Handled = true; return; }
             if (ptzPad == null)
             {
                 // No PTZ: ← → switch cameras.
