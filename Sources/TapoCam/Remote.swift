@@ -27,6 +27,25 @@ enum NetInfo {
         return parts.map { $0.count == 1 ? "0\($0)" : String($0) }.joined(separator: ":").lowercased()
     }
 
+    /// Whole ARP table as MAC → IP (MACs normalized like `mac(for:)`).
+    static func arpTable() -> [String: String] {
+        var out: [String: String] = [:]
+        for line in run("/usr/sbin/arp", ["-an"]).split(separator: "\n") {
+            guard let open = line.firstIndex(of: "("), let close = line.firstIndex(of: ")"),
+                  let at = line.range(of: " at ") else { continue }
+            let ip = String(line[line.index(after: open)..<close])
+            let parts = line[at.upperBound...].prefix { $0 != " " }.split(separator: ":")
+            guard parts.count == 6 else { continue }
+            out[normalizeMAC(parts.joined(separator: ":"))] = ip
+        }
+        return out
+    }
+
+    static func normalizeMAC(_ mac: String) -> String {
+        mac.lowercased().replacingOccurrences(of: "-", with: ":").split(separator: ":")
+            .map { $0.count == 1 ? "0\($0)" : String($0) }.joined(separator: ":")
+    }
+
     private static func touch(_ ip: String, port: UInt16) {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
         guard fd >= 0 else { return }
@@ -56,6 +75,26 @@ enum NetInfo {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+// MARK: - Finding cameras whose IP changed
+
+/// Cameras get new IPs from the router (DHCP). Like the Windows bridge, find them again by MAC.
+enum CameraLocator {
+    /// `wanted`: MAC → last known IP. Returns MAC → current IP for the cameras found.
+    /// Only sweeps the whole network when some camera doesn't answer at its last IP. Blocking.
+    static func find(_ wanted: [String: String]) -> [String: String] {
+        _ = NetScanner.openHosts(Array(Set(wanted.values)), port: 554, timeoutMs: 1500) // fills the ARP table
+        var arp = NetInfo.arpTable()
+        if wanted.allSatisfy({ arp[$0.key] == $0.value }) { return wanted }
+        for prefix in NetScanner.localPrefixes() {
+            _ = NetScanner.openHosts((1...254).map { "\(prefix).\($0)" }, port: 554, timeoutMs: 1200)
+        }
+        arp = NetInfo.arpTable()
+        return wanted.reduce(into: [:]) { out, item in
+            if let ip = arp[item.key] { out[item.key] = ip }
+        }
     }
 }
 
@@ -90,6 +129,11 @@ final class NetworkLocation: ObservableObject {
     /// Set by the PC sync when the home PC restreams the cameras (go2rtc).
     @Published private(set) var restreamPort: Int?
     private var restreamPassword: String?
+    /// Cameras found at a new IP on the home network (MAC → IP). Kept until they move again.
+    @Published private(set) var foundHosts: [String: String]
+    /// Gives the current camera list to the IP search (set by AppModel).
+    var cameraList: (() -> [Camera])?
+    private var locating = false
 
     func setRestream(port: Int?, password: String?) {
         guard port != restreamPort || password != restreamPassword else { return }
@@ -105,6 +149,7 @@ final class NetworkLocation: ObservableObject {
         mode = Mode(rawValue: defaults.string(forKey: "locationMode") ?? "") ?? .auto
         bridgeHost = defaults.string(forKey: "bridgeHost") ?? ""
         homeRouterMAC = defaults.string(forKey: "homeRouterMAC")
+        foundHosts = defaults.dictionary(forKey: "foundHosts") as? [String: String] ?? [:]
         monitor.pathUpdateHandler = { [weak self] _ in
             Task { @MainActor in self?.refresh(after: 2) } // let DHCP settle after a network change
         }
@@ -125,6 +170,12 @@ final class NetworkLocation: ObservableObject {
     /// Changes whenever streams must reconnect through a different path.
     var routeKey: String {
         (restreamPort != nil ? "restream-" : "") + (isHome ? "home" : "away-\(bridgeHost)")
+            + foundHosts.sorted { $0.key < $1.key }.map { "-\($0.value)" }.joined()
+    }
+
+    /// The camera's IP on the home network (the found one if it moved).
+    func localHost(for camera: Camera) -> String {
+        camera.mac.flatMap { foundHosts[NetInfo.normalizeMAC($0)] } ?? camera.host
     }
 
     func endpoint(for camera: Camera) -> Endpoint {
@@ -134,11 +185,41 @@ final class NetworkLocation: ObservableObject {
         if let port = restreamPort, let pw = restreamPassword, !host.isEmpty {
             return Endpoint(host: host, rtspPort: port,
                             onvifPort: isHome ? Camera.onvifPort : camera.bridgeONVIFPort,
-                            onvifHost: isHome ? camera.host : host,
+                            onvifHost: isHome ? localHost(for: camera) : host,
                             restreamPassword: pw)
         }
-        guard !isHome, !host.isEmpty else { return camera.localEndpoint }
+        guard !isHome, !host.isEmpty else {
+            return Endpoint(host: localHost(for: camera), rtspPort: camera.port, onvifPort: Camera.onvifPort)
+        }
         return Endpoint(host: host, rtspPort: camera.bridgeRTSPPort, onvifPort: camera.bridgeONVIFPort)
+    }
+
+    /// At home, looks for cameras that moved to another IP (by MAC). Cheap when nothing moved.
+    func locateCameras() {
+        guard isHome, !locating, let cameras = cameraList?() else { return }
+        var wanted: [String: String] = [:]
+        for cam in cameras {
+            guard let mac = cam.mac.map(NetInfo.normalizeMAC), !mac.isEmpty else { continue }
+            wanted[mac] = foundHosts[mac] ?? cam.host
+        }
+        guard !wanted.isEmpty else { return }
+        locating = true
+        Task {
+            let found = await Task.detached(priority: .utility) { CameraLocator.find(wanted) }.value
+            locating = false
+            var next: [String: String] = [:]
+            for cam in cameras {
+                guard let mac = cam.mac.map(NetInfo.normalizeMAC) else { continue }
+                if let ip = found[mac] {
+                    if ip != cam.host { next[mac] = ip }
+                } else if let old = foundHosts[mac] {
+                    next[mac] = old // not seen right now: keep the last known IP
+                }
+            }
+            guard next != foundHosts else { return }
+            foundHosts = next
+            defaults.set(next, forKey: "foundHosts")
+        }
     }
 
     func markCurrentNetworkAsHome() {
@@ -160,6 +241,7 @@ final class NetworkLocation: ObservableObject {
             guard !Task.isCancelled else { return }
             currentRouterMAC = mac
             detecting = false
+            locateCameras()
         }
     }
 }

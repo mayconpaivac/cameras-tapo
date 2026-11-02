@@ -32,5 +32,7 @@ final class AppModel: ObservableObject {
 
     init() {
         sync = PCSync(store: store, location: location)
+        location.cameraList = { [store] in store.cameras }
+        location.locateCameras()
     }
 }

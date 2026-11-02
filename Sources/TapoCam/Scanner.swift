@@ -56,8 +56,8 @@ enum NetScanner {
     }
 
     /// Non-blocking connects in batches; returns the hosts that accepted.
-    private static func openHosts(_ ips: [String], port: UInt16, timeoutMs: Int,
-                                  progress: (Double) -> Void) -> Set<String> {
+    static func openHosts(_ ips: [String], port: UInt16, timeoutMs: Int,
+                          progress: (Double) -> Void = { _ in }) -> Set<String> {
         var open = Set<String>()
         let batchSize = 64 // stay well under the default open-file limit
         var done = 0

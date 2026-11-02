@@ -140,6 +140,7 @@ final class PCSync: ObservableObject {
             location.setRestream(port: nil, password: nil) // PC unreachable: at home, go straight to the cameras
             status = "Não achei o PC (\(error.localizedDescription)). Ele está ligado e o Tailscale conectado?"
         }
+        location.locateCameras() // cameras may have new IPs; the PC's list can be stale too
     }
 }
 
