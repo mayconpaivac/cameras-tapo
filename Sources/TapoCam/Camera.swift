@@ -119,6 +119,8 @@ struct Feed: Identifiable, Hashable {
 @MainActor
 final class CameraStore: ObservableObject {
     @Published private(set) var cameras: [Camera] = []
+    /// PC cameras removed on this Mac only. The PC sync keeps them out until shown again.
+    @Published private(set) var hidden: [Camera] = []
 
     var feeds: [Feed] {
         cameras.flatMap { cam in cam.lenses.map { Feed(camera: cam, lens: $0) } }
@@ -143,11 +145,16 @@ final class CameraStore: ObservableObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("cameras.json")
     }()
+    private var hiddenURL: URL { fileURL.deletingLastPathComponent().appendingPathComponent("hidden-cameras.json") }
 
     init() {
         if let data = try? Data(contentsOf: fileURL),
            let list = try? JSONDecoder().decode([Camera].self, from: data) {
             cameras = list
+        }
+        if let data = try? Data(contentsOf: hiddenURL),
+           let list = try? JSONDecoder().decode([Camera].self, from: data) {
+            hidden = list
         }
         assignMissingSlots()
         Keychain.adoptExisting(cameras.map(\.id))
@@ -172,6 +179,20 @@ final class CameraStore: ObservableObject {
         persist()
     }
 
+    /// Removes a PC camera from this Mac only (it stays on the PC).
+    func hide(_ camera: Camera) {
+        cameras.removeAll { $0.id == camera.id }
+        hidden.removeAll { $0.id == camera.id }
+        hidden.append(camera)
+        persist()
+    }
+
+    func unhide(_ camera: Camera) {
+        hidden.removeAll { $0.id == camera.id }
+        if !cameras.contains(where: { $0.id == camera.id }) { cameras.append(camera) }
+        persist()
+    }
+
     func setMAC(_ mac: String, for id: UUID) {
         guard let i = cameras.firstIndex(where: { $0.id == id }), cameras[i].mac != mac else { return }
         cameras[i].mac = mac // no revision bump: the stream doesn't need to restart
@@ -184,9 +205,11 @@ final class CameraStore: ObservableObject {
         // An empty PC (not set up yet) must not wipe the cameras already on this Mac.
         guard !items.isEmpty || cameras.isEmpty else { return }
         var next: [Camera] = []
+        var nextHidden: [Camera] = []
         for item in items {
             guard let id = UUID(uuidString: item.id) else { continue }
-            let old = cameras.first { $0.id == id }
+            let isHidden = hidden.contains { $0.id == id }
+            let old = (isHidden ? hidden : cameras).first { $0.id == id }
             var cam = old ?? Camera(id: id, name: item.name, host: item.host, username: item.username)
             cam.name = item.name
             cam.host = item.host
@@ -202,11 +225,13 @@ final class CameraStore: ObservableObject {
                 changed = true
             }
             if changed { cam.revision = (old?.revision ?? 0) + 1 }
-            next.append(cam)
+            if isHidden { nextHidden.append(cam) } else { next.append(cam) }
         }
-        for gone in cameras where !next.contains(where: { $0.id == gone.id }) { Keychain.delete(gone.id) }
-        guard next != cameras else { return }
+        let kept = next + nextHidden
+        for gone in cameras + hidden where !kept.contains(where: { $0.id == gone.id }) { Keychain.delete(gone.id) }
+        guard next != cameras || nextHidden != hidden else { return }
         cameras = next
+        hidden = nextHidden
         persist()
     }
 
@@ -223,6 +248,7 @@ final class CameraStore: ObservableObject {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted]
         try? enc.encode(cameras).write(to: fileURL, options: .atomic)
+        try? enc.encode(hidden).write(to: hiddenURL, options: .atomic)
     }
 }
 

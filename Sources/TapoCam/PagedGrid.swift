@@ -201,11 +201,9 @@ struct PagedGrid: View {
                 Button(feed.camera.ptz ? "Abrir e controlar" : "Ver em alta qualidade") { onOpen(feed) }
                 Button("Colocar em destaque") { onFeature(feed) }
                 if let onPiP { Button("Picture in Picture") { onPiP(feed) } }
-                if !managedByPC {
-                    Button("Editar…") { onEdit(feed.camera) }
-                    Divider()
-                    Button("Remover…", role: .destructive) { onRemove(feed.camera) }
-                }
+                if !managedByPC { Button("Editar…") { onEdit(feed.camera) } }
+                Divider()
+                Button(managedByPC ? "Remover deste Mac…" : "Remover…", role: .destructive) { onRemove(feed.camera) }
             }
     }
 

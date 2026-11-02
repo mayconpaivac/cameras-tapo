@@ -387,8 +387,12 @@ struct ContentView: View {
         .confirmationDialog("Remover \(removing?.name ?? "")?",
                             isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button("Remover", role: .destructive) {
-                if let removing { store.remove(removing) }
+                if let removing { sync.isEnabled ? store.hide(removing) : store.remove(removing) }
                 removing = nil
+            }
+        } message: {
+            if sync.isEnabled {
+                Text("Ela sai só deste Mac e continua no PC. Dá pra trazer de volta em Em casa / Fora.")
             }
         }
     }

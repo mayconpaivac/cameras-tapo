@@ -287,6 +287,18 @@ struct RemoteAccessSheet: View {
                             }
                         }
                     }
+                    if !store.hidden.isEmpty && sync.isEnabled {
+                        Divider()
+                        Text("Removidas deste Mac").font(.caption).foregroundStyle(.secondary)
+                        ForEach(store.hidden) { cam in
+                            HStack {
+                                Image(systemName: "eye.slash").foregroundStyle(.secondary)
+                                Text(cam.name).foregroundStyle(.secondary)
+                                Spacer()
+                                Button("Mostrar de novo") { store.unhide(cam) }
+                            }
+                        }
+                    }
                 }
                 .padding(6)
             }
